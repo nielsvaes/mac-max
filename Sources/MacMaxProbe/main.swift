@@ -16,6 +16,7 @@ func usage() -> Never {
       watch                every 500ms, print what sits under the cursor
       hit                  poll the cursor and report green-button hits
       hit <x> <y>          one-shot hit test at that Accessibility-space point
+      find <app name>      locate the Fill and Return to Previous Size commands
     """)
     exit(1)
 }
@@ -122,6 +123,19 @@ case "hit":
                       "buttonFrame=\(AX.frame(found.button).map(String.init(describing:)) ?? "?")")
             }
             Thread.sleep(forTimeInterval: 0.3)
+        }
+    }
+
+case "find":
+    guard arguments.count > 1 else { usage() }
+    let target = app(named: arguments[1])
+    let finder = MenuItemFinder()
+    for command in [MenuCommand.fill, .returnToPreviousSize] {
+        if let item = finder.item(command, pid: target.processIdentifier) {
+            print("\(command): found \"\(AX.string(item, kAXTitleAttribute as String) ?? "?")\"",
+                  "enabled: \(AX.isEnabled(item))")
+        } else {
+            print("\(command): NOT FOUND")
         }
     }
 
