@@ -71,7 +71,9 @@ public enum AX {
 
     public static func frame(_ element: AXUIElement) -> CGRect? {
         guard let positionValue = copyAttribute(element, kAXPositionAttribute as String),
-              let sizeValue = copyAttribute(element, kAXSizeAttribute as String) else { return nil }
+              let sizeValue = copyAttribute(element, kAXSizeAttribute as String),
+              CFGetTypeID(positionValue) == AXValueGetTypeID(),
+              CFGetTypeID(sizeValue) == AXValueGetTypeID() else { return nil }
         var origin = CGPoint.zero
         var size = CGSize.zero
         guard AXValueGetValue(positionValue as! AXValue, .cgPoint, &origin),
