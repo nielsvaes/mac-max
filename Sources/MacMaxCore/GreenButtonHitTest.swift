@@ -6,6 +6,13 @@ public struct GreenButtonHit {
     public let window: AXUIElement
     public let pid: pid_t
     public let subrole: String
+
+    public init(button: AXUIElement, window: AXUIElement, pid: pid_t, subrole: String) {
+        self.button = button
+        self.window = window
+        self.pid = pid
+        self.subrole = subrole
+    }
 }
 
 public enum GreenButtonHitTest {

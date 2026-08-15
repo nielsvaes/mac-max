@@ -17,6 +17,7 @@ func usage() -> Never {
       hit                  poll the cursor and report green-button hits
       hit <x> <y>          one-shot hit test at that Accessibility-space point
       find <app name>      locate the Fill and Return to Previous Size commands
+      fill <app name>      fill the app's focused window, then restore it
     """)
     exit(1)
 }
@@ -138,6 +139,28 @@ case "find":
             print("\(command): NOT FOUND")
         }
     }
+
+case "fill":
+    guard arguments.count > 1 else { usage() }
+    let target = app(named: arguments[1])
+    let axApp = AXUIElementCreateApplication(target.processIdentifier)
+    guard let window = AX.element(axApp, kAXFocusedWindowAttribute as String),
+          let button = AX.children(window).first(where: {
+              GreenButton.isGreenButton(subrole: AX.string($0, kAXSubroleAttribute as String))
+          }),
+          let subrole = AX.string(button, kAXSubroleAttribute as String) else {
+        print("no focused window with a green button"); exit(1)
+    }
+    ScreenProvider.shared.refresh()
+    let hit = GreenButtonHit(button: button, window: window,
+                             pid: target.processIdentifier, subrole: subrole)
+    let filler = WindowFiller()
+    print("before:  ", AX.frame(window)!)
+    filler.performSynchronously(.fillOrRestore, on: hit)
+    print("filled:  ", AX.frame(window)!)
+    Thread.sleep(forTimeInterval: 1.0)
+    filler.performSynchronously(.fillOrRestore, on: hit)
+    print("restored:", AX.frame(window)!)
 
 default:
     usage()
