@@ -14,6 +14,8 @@ func usage() -> Never {
       menu <app name>      the app's Window menu, with shortcuts and enabled state
       window <app name>    the app's focused window: frame and traffic-light subroles
       watch                every 500ms, print what sits under the cursor
+      hit                  poll the cursor and report green-button hits
+      hit <x> <y>          one-shot hit test at that Accessibility-space point
     """)
     exit(1)
 }
@@ -95,6 +97,32 @@ case "watch":
             print(String(format: "%.0f,%.0f", location.x, location.y), role, subrole, "pid:\(pid)")
         }
         Thread.sleep(forTimeInterval: 0.5)
+    }
+
+case "hit":
+    if arguments.count > 1 {
+        guard arguments.count >= 3, let x = Double(arguments[1]), let y = Double(arguments[2]) else {
+            print("usage: swift run MacMaxProbe hit <x> <y>"); exit(1)
+        }
+        let point = CGPoint(x: x, y: y)
+        if let found = GreenButtonHitTest.hit(at: point) {
+            let title = AX.string(found.window, kAXTitleAttribute as String) ?? "?"
+            print("HIT  subrole=\(found.subrole)  pid=\(found.pid)  window=\"\(title)\"  " +
+                  "buttonFrame=\(AX.frame(found.button).map(String.init(describing:)) ?? "?")")
+        } else {
+            print("no green button at \(point)")
+        }
+    } else {
+        print("hover a green button; ctrl-c to stop")
+        while true {
+            let location = CGEvent(source: nil)?.location ?? .zero
+            if let found = GreenButtonHitTest.hit(at: location) {
+                let title = AX.string(found.window, kAXTitleAttribute as String) ?? "?"
+                print("HIT  subrole=\(found.subrole)  pid=\(found.pid)  window=\"\(title)\"  " +
+                      "buttonFrame=\(AX.frame(found.button).map(String.init(describing:)) ?? "?")")
+            }
+            Thread.sleep(forTimeInterval: 0.3)
+        }
     }
 
 default:
