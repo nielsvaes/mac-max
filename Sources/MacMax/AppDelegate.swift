@@ -40,6 +40,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Permission
 
+    /// Starts the tap, or prompts once and waits for permission.
+    ///
+    /// The prompt is deliberately outside the poll: TCC shows its dialog at most once
+    /// per process anyway, so re-requesting every second only leaves a declined user
+    /// with a background process making a TCC call for the rest of the session.
     private func startInterceptingWhenPermitted() {
         if interceptor.start() {
             permissionTimer?.invalidate()
@@ -52,8 +57,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         refreshMenu()
         guard permissionTimer == nil else { return }
         permissionTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-            self?.startInterceptingWhenPermitted()
+            self?.pollForPermission()
         }
+    }
+
+    /// Watches the trust state and starts the tap the moment it is granted.
+    ///
+    /// Everything here is conditional on that transition: no prompt, and no menu
+    /// rebuild, which a once-a-second refresh would otherwise perform underneath an
+    /// open menu.
+    private func pollForPermission() {
+        guard Permissions.isTrusted, interceptor.start() else { return }
+        permissionTimer?.invalidate()
+        permissionTimer = nil
+        refreshMenu()
     }
 
     // MARK: - Status item
