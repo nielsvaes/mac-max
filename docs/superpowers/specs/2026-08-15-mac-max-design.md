@@ -150,10 +150,14 @@ element has become invalid are pruned lazily on access, and the store is capped.
 target process is walked recursively for an item whose `AXMenuItemCmdChar` is `f`
 (case-insensitive) and whose `AXMenuItemCmdModifiers` is `28` — that is
 fn (16) + NoCommand (8) + Control (4), the `fn`+`Control`+`F` binding, whatever the
-system language calls the item. Return to Previous Size is the same match on `r`. A
-title match is tried next, and direct resize catches everything else. The result is
-cached per pid and dropped when the process terminates, so only the first click on a
-given application pays the walk.
+system language calls the item. Return to Previous Size is the same match on `r`.
+There is no title-based fallback: a generic word like "Fill" is a common command name
+in paint, 3D and video apps, and matching it by title risked firing a document-modifying
+command in an unrelated app instead of window tiling, for little benefit since an app
+lacking the real tiling item almost never has an equivalent under an English title
+anyway. Direct resize catches everything else. The result is cached per pid and
+dropped when the process terminates, so only the first click on a given application
+pays the walk.
 
 Both items are disabled unless the owning application is frontmost with the target
 window focused, which is why the app is activated and the window raised first.
