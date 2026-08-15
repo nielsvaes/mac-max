@@ -139,4 +139,24 @@ public enum AX {
         }
         return last
     }
+
+    /// Waits for a window's frame to move away from `baseline`, then for it to stop
+    /// changing, and returns where it came to rest.
+    ///
+    /// Returns nil when it never moved at all, which is how a caller distinguishes
+    /// "the action did not take effect" from "it took effect and landed somewhere".
+    /// The plain `settledFrame(of:timeout:)` cannot make that distinction: it samples
+    /// twice 40ms apart and will call an animation that has not started yet "settled"
+    /// at its pre-action frame. Never call this from the event tap callback.
+    public static func settledFrame(of window: AXUIElement, changedFrom baseline: CGRect,
+                                    startTimeout: TimeInterval = 1.0) -> CGRect? {
+        let deadline = Date().addingTimeInterval(startTimeout)
+        while Date() < deadline {
+            if let current = frame(window), current != baseline {
+                return settledFrame(of: window)
+            }
+            Thread.sleep(forTimeInterval: 0.03)
+        }
+        return nil
+    }
 }
