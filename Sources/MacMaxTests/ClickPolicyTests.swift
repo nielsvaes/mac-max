@@ -60,6 +60,30 @@ func runClickPolicyTests(_ h: Harness) {
         h.expectEqual(ClickPolicy.action(subrole: green, flags: [.maskAlternate], enabled: false), .passThrough)
     }
 
+    h.test("couldAct passes exactly the modifier combinations that have a mapping") {
+        h.expect(ClickPolicy.couldAct(flags: []), "a plain click could act")
+        h.expect(ClickPolicy.couldAct(flags: [.maskAlternate]), "Option+click could act")
+        h.expect(!ClickPolicy.couldAct(flags: [.maskCommand]), "Command+click could not act")
+        h.expect(!ClickPolicy.couldAct(flags: [.maskControl]), "Control+click could not act")
+        h.expect(!ClickPolicy.couldAct(flags: [.maskShift]), "Shift+click could not act")
+        h.expect(!ClickPolicy.couldAct(flags: [.maskAlternate, .maskShift]), "Option+Shift+click could not act")
+    }
+
+    h.test("couldAct ignores the ride-along bits, so a real event is not screened out") {
+        h.expect(ClickPolicy.couldAct(flags: [.maskAlphaShift, .maskNonCoalesced, .maskNumericPad]),
+                 "caps lock, non-coalesced and numeric pad alone still could act")
+        h.expect(ClickPolicy.couldAct(flags: [.maskAlternate, .maskNonCoalesced]),
+                 "Option plus a ride-along bit still could act")
+    }
+
+    h.test("screening on modifiers alone is safe for the zoom-only green button as well") {
+        let combinations: [CGEventFlags] = [[], [.maskAlternate], [.maskCommand], [.maskAlternate, .maskShift]]
+        for flags in combinations {
+            let acts = ClickPolicy.action(subrole: GreenButton.zoomSubrole, flags: flags, enabled: true) != .passThrough
+            h.expectEqual(ClickPolicy.couldAct(flags: flags), acts)
+        }
+    }
+
     h.test("isGreenButton recognises both green button subroles and nothing else") {
         h.expect(GreenButton.isGreenButton(subrole: GreenButton.fullScreenSubrole), "fullscreen button is green")
         h.expect(GreenButton.isGreenButton(subrole: GreenButton.zoomSubrole), "zoom button is green")

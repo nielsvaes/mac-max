@@ -38,4 +38,16 @@ public enum ClickPolicy {
         if held == .maskAlternate { return .toggleFullScreen }
         return .passThrough
     }
+
+    /// Whether these modifiers could produce anything other than pass-through, for
+    /// any green button.
+    ///
+    /// The event tap uses this to dismiss a click before hit-testing it: the flags
+    /// ride on the event already, while the subrole costs Accessibility round trips
+    /// against an application that may be unresponsive. It asks `action` rather than
+    /// restating its rules, so the screen cannot drift from the mapping it screens
+    /// for — and the mapping does not depend on which green button was hit.
+    public static func couldAct(flags: CGEventFlags) -> Bool {
+        action(subrole: GreenButton.fullScreenSubrole, flags: flags, enabled: true) != .passThrough
+    }
 }

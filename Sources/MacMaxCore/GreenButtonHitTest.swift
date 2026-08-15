@@ -23,7 +23,8 @@ public enum GreenButtonHitTest {
     ///
     /// `point` is in Accessibility coordinates, which is also what `CGEvent.location`
     /// gives, so an event's location can be passed straight in. Runs inside the event
-    /// tap callback, so it does nothing beyond three attribute reads.
+    /// tap callback, so it does nothing beyond the position lookup and the handful of
+    /// attribute reads that identify the button and find its window.
     public static func hit(at point: CGPoint) -> GreenButtonHit? {
         var element: AXUIElement?
         guard AXUIElementCopyElementAtPosition(systemWide, Float(point.x), Float(point.y), &element) == .success,
@@ -39,8 +40,10 @@ public enum GreenButtonHitTest {
     }
 
     /// Walks up from the button to its window. Measured on macOS 26 the window is the
-    /// button's immediate parent; the extra depth is slack for non-standard windows.
-    static func enclosingWindow(of element: AXUIElement, maxDepth: Int = 5) -> AXUIElement? {
+    /// button's immediate parent, so one level of walk is all this needs; every extra
+    /// level is two more round trips inside the tap callback, against an application
+    /// that may be unresponsive, for a shape no button has been seen to have.
+    static func enclosingWindow(of element: AXUIElement, maxDepth: Int = 2) -> AXUIElement? {
         var current = element
         for _ in 0..<maxDepth {
             if AX.string(current, kAXRoleAttribute as String) == (kAXWindowRole as String) { return current }
