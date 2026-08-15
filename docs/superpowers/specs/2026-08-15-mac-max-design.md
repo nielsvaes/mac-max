@@ -113,7 +113,11 @@ space (origin at the top-left of the primary display, y increasing downward).
 A green button is an element whose `AXSubrole` is `AXFullScreenButton` (windows that
 support fullscreen) or `AXZoomButton` (windows that do not). The owning window is
 found by walking `AXParent` until an element with role `AXWindow` appears, to a depth
-of five. The owning process comes from `AXUIElementGetPid`.
+of two — the measured structure puts the window one hop above the button, and the
+walk runs inside the event tap callback, where every extra level is two more
+Accessibility round trips the mouse waits on. A window nesting its buttons deeper
+yields no hit, so the click passes through untouched. The owning process comes from
+`AXUIElementGetPid`.
 
 ## Fill and restore
 
