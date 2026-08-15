@@ -85,11 +85,14 @@ leftMouseUp
        else       → fill or restore
 ```
 
-Only the hit test runs inside the tap callback. `AXUIElementSetMessagingTimeout` is
-set to 50 ms, so an unresponsive application cannot stall the mouse — the hit test
-fails, the click passes through, and the window enters fullscreen as it would have
-without Mac Max. All window mutation happens off the callback, so menu-walking
-latency never reaches the input system.
+Only the hit test runs inside the tap callback. `AXUIElementSetMessagingTimeout` on
+the system-wide element sets a 100 ms process-wide default, so an unresponsive
+application cannot stall the mouse — the hit test fails, the click passes through,
+and the window enters fullscreen as it would have without Mac Max. All window
+mutation happens off the callback, so menu-walking latency never reaches the input
+system. The timeout is process-wide rather than per-element deliberately: a menu walk
+that times out simply falls back to direct resize, which is an acceptable outcome,
+whereas a stalled input path is not.
 
 Both the down and the up are swallowed. An application that receives a lone mouse-up
 should not act on it. If the button is pressed and released elsewhere, nothing
@@ -145,10 +148,19 @@ element has become invalid are pruned lazily on access, and the store is capped.
 
 **Locating the Fill menu item without depending on language.** The menu bar of the
 target process is walked recursively for an item whose `AXMenuItemCmdChar` is `f`
-with the Control modifier — the `fn`+`Control`+`F` binding, whatever the system
-language calls the item. A title match against a small table is tried next, and
-direct resize catches everything else. The result is cached per pid and dropped when
-the process terminates, so only the first click on a given application pays the walk.
+(case-insensitive) and whose `AXMenuItemCmdModifiers` is `28` — that is
+fn (16) + NoCommand (8) + Control (4), the `fn`+`Control`+`F` binding, whatever the
+system language calls the item. Return to Previous Size is the same match on `r`. A
+title match is tried next, and direct resize catches everything else. The result is
+cached per pid and dropped when the process terminates, so only the first click on a
+given application pays the walk.
+
+Both items are disabled unless the owning application is frontmost with the target
+window focused, which is why the app is activated and the window raised first.
+
+Measured on macOS 26.6.1: Fill sits at the top level of the Window menu and Return to
+Previous Size sits inside its Move & Resize submenu, so the walk must recurse rather
+than assume a fixed path.
 
 **Multiple displays.** The window fills whichever screen its frame overlaps most.
 
@@ -188,6 +200,11 @@ after a rebuild. `make reset-permission` runs `tccutil reset Accessibility
 com.nielsvaes.MacMax` for when the permission state becomes inconsistent.
 
 ## Testing
+
+Command Line Tools ship neither XCTest nor swift-testing, so `swift test` cannot run
+without installing Xcode. Tests are therefore an executable target, `MacMaxTests`,
+built on a small assertion harness and run with `make test`, which exits non-zero on
+failure. This keeps the red-green cycle available without a 10 GB dependency.
 
 Unit tests cover the logic that holds no Accessibility dependency:
 
