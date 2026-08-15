@@ -26,8 +26,10 @@ to `Option`+click. It does nothing else.
 | `Command` / `Control` / `Shift` + click green button | Passed through unchanged |
 | Hover green button | Untouched — the system tiling menu still appears |
 | Click inside that hover menu | Passed through (hit-tests as a menu item, not a button) |
-| Click green button on a fullscreen window | Passed through, so it exits fullscreen as usual |
+| Click green button on a fullscreen window | Leaves fullscreen, as a plain click always did [^fs] |
 | Click anywhere that is not a green button | Passed through — the app is invisible |
+
+[^fs]: This click is swallowed like any other on the green button; Mac Max leaves fullscreen itself, off the input path, since Fill does not exist in fullscreen anyway.
 
 `Option`+click currently means Zoom. Mac Max takes that combination over; Zoom
 remains reachable from the Window menu.

@@ -43,11 +43,18 @@ public final class WindowFiller {
     // MARK: - Actions
 
     private func toggleFullScreen(_ hit: GreenButtonHit) {
+        guard AX.isEnabled(hit.button) else { return }
         focus(hit)
-        let wasFullScreen = AX.isFullScreen(hit.window)
-        if !AX.setFullScreen(hit.window, !wasFullScreen) {
-            // Windows that do not expose AXFullScreen still respond to their own
-            // green button, whose default action is the one we want here.
+        // Whether the attribute exists at all is the question, not what it says: a
+        // window that does not expose AXFullScreen cannot be fullscreened by setting
+        // it, and only that window needs the button pressed instead. Falling back on
+        // a failed *set* would be wrong — a set that reports failure at the 100ms
+        // messaging timeout may still have been delivered, and an app mid-fullscreen
+        // transition is exactly the app that runs long, so the press would toggle
+        // straight back.
+        if let isFullScreen = AX.bool(hit.window, "AXFullScreen") {
+            AX.setFullScreen(hit.window, !isFullScreen)
+        } else {
             AX.press(hit.button)
         }
         // A fullscreen window's frame has nothing to do with what we recorded.
@@ -55,6 +62,27 @@ public final class WindowFiller {
     }
 
     private func fillOrRestore(_ hit: GreenButtonHit) {
+        // A disabled green button — a window with a modal sheet attached — still
+        // hit-tests, so the click has already been swallowed by the time we get here.
+        // Doing nothing is what a disabled button does; acting would move a window
+        // that macOS itself would have left alone.
+        guard AX.isEnabled(hit.button) else { return }
+
+        // Fill does not exist in fullscreen, so a fullscreen window gets the outcome
+        // the spec promises — it leaves fullscreen — delivered here rather than by
+        // passing the click through. Checked on this queue and not in the tap: the
+        // input path must not pay an Accessibility round trip on every green-button
+        // click for a case this rare. The store is deliberately untouched, because a
+        // fullscreen frame is not a size to restore to; recording one would hand a
+        // later restore the whole display, menu bar included. Setting the attribute
+        // names `hit.window` outright, so unlike a menu item it needs no activation
+        // first, and skipping the focus poll keeps the dead time between the click
+        // and the exit down to the transition itself.
+        if AX.isFullScreen(hit.window) {
+            AX.setFullScreen(hit.window, false)
+            return
+        }
+
         guard let current = AX.frame(hit.window) else { return }
         let focused = focus(hit)
 
@@ -80,7 +108,11 @@ public final class WindowFiller {
 
         guard let target = fillTarget(for: previous) else { return }
         AX.setFrame(hit.window, target)
-        guard let applied = AX.settledFrame(of: hit.window),
+        // Waiting for the frame to leave `previous`, exactly as the native path does.
+        // The plain two-sample settle would read the pre-move frame twice on an app
+        // that animates or defers the resize, and the window would end up filled but
+        // unrecorded — so the next click would fill again instead of restoring.
+        guard let applied = AX.settledFrame(of: hit.window, changedFrom: previous),
               // A window that did not actually move — a non-resizable window such as
               // About This Mac — is not worth remembering. Recording it anyway would
               // cost the user a second dead click undoing a fill that never happened.
@@ -104,16 +136,31 @@ public final class WindowFiller {
         return settled
     }
 
-    /// Undoes a fill, reporting whether it succeeded.
+    /// Undoes a fill, reporting whether the window actually ended up back at
+    /// `record.previousFrame`.
+    ///
+    /// Neither path can answer that on its own. `AX.setFrame` reports only whether it
+    /// could build the values to send, never whether the window took them. And macOS
+    /// keeps its own untile anchor, which can differ from the frame we recorded, so
+    /// Return to Previous Size moving the window is not the same as it moving the
+    /// window back. Whichever path ran, the frame is therefore verified against
+    /// `previousFrame` and corrected once directly if it is not there. Only a true
+    /// return lets the caller drop the record, which is what keeps a genuinely failed
+    /// restore retryable instead of losing the pre-fill geometry for good.
     private func restore(_ hit: GreenButtonHit, to record: FillRecord, focused: Bool) -> Bool {
-        if nativeRestore(hit, to: record, focused: focused) { return true }
-        return AX.setFrame(hit.window, record.previousFrame)
+        if !nativeRestore(hit, to: record, focused: focused) {
+            AX.setFrame(hit.window, record.previousFrame)
+        }
+        if hasSettled(hit.window, at: record.previousFrame) { return true }
+        AX.setFrame(hit.window, record.previousFrame)
+        return hasSettled(hit.window, at: record.previousFrame)
     }
 
-    /// Attempts Return to Previous Size and reports whether it worked. Only tried
-    /// once focus is confirmed and the record says a native fill is what put the
-    /// window there — pressing it on a directly-resized window would do nothing
-    /// useful even if it succeeded.
+    /// Attempts Return to Previous Size and reports whether it moved the window at
+    /// all. Only tried once focus is confirmed and the record says a native fill is
+    /// what put the window there — pressing it on a directly-resized window would do
+    /// nothing useful even if it succeeded. Where the window landed is `restore`'s
+    /// question, not this one's.
     private func nativeRestore(_ hit: GreenButtonHit, to record: FillRecord, focused: Bool) -> Bool {
         guard focused, record.method == .nativeTiling,
               let item = menus.item(.returnToPreviousSize, pid: hit.pid), AX.isEnabled(item) else { return false }
@@ -121,6 +168,14 @@ public final class WindowFiller {
         guard let settled = AX.settledFrame(of: hit.window, changedFrom: record.appliedFrame),
               !AXGeometry.matches(settled, record.appliedFrame, tolerance: store.tolerance) else { return false }
         return true
+    }
+
+    /// Whether the window has come to rest at `target`. A window whose frame cannot be
+    /// read at all counts as not there, which is the safe answer: it keeps the record
+    /// until `prune` decides the window is gone.
+    private func hasSettled(_ window: AXUIElement, at target: CGRect) -> Bool {
+        guard let frame = AX.settledFrame(of: window) else { return false }
+        return AXGeometry.matches(frame, target, tolerance: store.tolerance)
     }
 
     // MARK: - Helpers
