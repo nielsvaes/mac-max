@@ -4,9 +4,10 @@ import Foundation
 
 /// Swallows clicks on green buttons and hands them to `WindowFiller`.
 ///
-/// The callback runs on the main run loop. It does exactly one Accessibility hit test
-/// and then returns; the work itself is handed to the filler's own queue. Anything
-/// slower than that inside the callback shows up as a sticky mouse.
+/// The callback runs on the main run loop. It does exactly one bounded Accessibility
+/// round trip before returning — a hit test on the down, a frame read on the up; the
+/// work itself is handed to the filler's own queue. Anything slower than that inside
+/// the callback shows up as a sticky mouse.
 public final class ClickInterceptor {
 
     private let filler: WindowFiller
@@ -20,6 +21,14 @@ public final class ClickInterceptor {
 
     public init(filler: WindowFiller) {
         self.filler = filler
+    }
+
+    /// The tap holds an unretained pointer to `self` and is kept alive by the run
+    /// loop, not by Swift's ARC, so it outlives this object unless torn down here —
+    /// without this, releasing a running interceptor would leave the callback holding
+    /// a dangling pointer for the next click.
+    deinit {
+        stop()
     }
 
     public var isRunning: Bool { tap != nil }
