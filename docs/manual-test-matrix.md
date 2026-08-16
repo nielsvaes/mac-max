@@ -1,15 +1,20 @@
 # Mac Max — manual verification matrix
 
 **macOS version:** 26.6.1 (build 25G76)
-**Date:** 2026-08-15
-**Describes commit:** `90d9b64` — "Add menu bar app shell and bundle script" (the tip of `main` when this document was written; all ten implementation tasks are complete and reviewed as of this commit)
+**Date written:** 2026-08-15
+**Owner verification began:** 2026-08-16, against an installed, `Mac Max Dev`-signed build
 
 ## Status of this matrix
 
-**Nobody has clicked a green stoplight button with Mac Max running yet.** Most of the
-21 rows below require a human physically clicking, Option-clicking or Command-clicking
-a real traffic-light button, and several require granting Accessibility permission in
-System Settings — neither of these can be done programmatically from this environment
+**The core interaction is confirmed by real clicks.** The owner has run rows 1, 2 and 4
+against a live installed build: a plain click fills, a second click restores, and
+`Option`+click enters native fullscreen. That is the first evidence in this project
+that the session event tap actually receives and acts on genuine mouse clicks —
+everything recorded as *automated* below was driven by calling into the code directly.
+
+The remaining rows are still unrun. Most of them require a human physically clicking,
+Option-clicking or Command-clicking a real traffic-light button, which cannot be done
+programmatically from the build environment
 (a TCC grant needs SIP disabled to script, and a synthetic `CGEvent` post is not the
 same code path as a real click arriving at the session event tap). The project owner
 is expected to run this matrix by hand and fill in the remaining **Result** cells.
@@ -25,14 +30,32 @@ automated evidence are marked **pending — needs a human click**, with Result l
 blank. Nothing in this document should be read as "all green" until the owner has
 worked through it.
 
+### Operational note from first install (2026-08-16)
+
+Granting Accessibility permission failed on the first attempt in a way worth
+recording, because the symptom is misleading: System Settings showed **Mac Max** as
+enabled while the app still reported "Waiting for Accessibility permission…", and
+relaunching re-prompted. The cause was a stale TCC entry — with no signing identity
+present, `scripts/bundle.sh` had fallen back to an ad-hoc signature, and TCC pins
+ad-hoc grants to the exact binary hash. An earlier automated verification build had
+been granted and then denied under the same bundle identifier, and `make install`
+replaces the bundle at a path that already had an entry; either invalidates the pin
+while leaving the row visible in the UI.
+
+Toggling the checkbox off and on does **not** clear it. The fix is
+`make reset-permission` (or removing the row with **−**) followed by a fresh grant.
+The durable fix is a stable signing identity: once a self-signed `Mac Max Dev` code
+signing certificate existed and was trusted for code signing, the grant survived
+rebuilds. This is the failure the README's signing-identity section exists to prevent.
+
 ## The matrix
 
 | # | Scenario | Expected | Result | Covered by |
 |---|---|---|---|---|
-| 1 | Click green on a Finder window | Fills the display, stays in the current Space, menu bar and Dock still visible | | Pending — needs a human click. `WindowFiller.performSynchronously(.fillOrRestore, on:)` was driven directly (not via a click) against a live Finder window in Task 8 and landed exactly on the screen's AX visible frame (`filled: (-0.0, 30.0, 1408.0, 851.0)` vs. `ax visibleFrame: (0.0, 30.0, 1408.0, 851.0)` — task-8-report.md, Check 1). That proves the fill *mechanism* is correct; it does not prove a real click reaches it, since `ClickInterceptor` (Task 9) has never been driven by an actual mouse click. "Stays in the current Space" and "menu bar/Dock still visible" were never measured by any task. |
-| 2 | Click green again | Returns to the previous size and position | | Pending — needs a human click. Same Task 8 evidence: driven directly, the restore matched `before` exactly or within ~1pt on every edge across several runs (task-8-report.md, Checks 1–2 and the round-1 fix's re-verification). The click path is untested. |
+| 1 | Click green on a Finder window | Fills the display, stays in the current Space, menu bar and Dock still visible | **PASS — real click, owner-verified 2026-08-16** | Owner clicked the green button on a live window with an installed, `Mac Max Dev`-signed build and reported it fills. This is the first end-to-end confirmation that the whole chain runs on a genuine click: event tap → `GreenButtonHitTest` → `ClickPolicy` → `WindowFiller` → macOS Fill. Supporting mechanism evidence: `WindowFiller.performSynchronously(.fillOrRestore, on:)` was driven directly (not via a click) against a live Finder window in Task 8 and landed exactly on the screen's AX visible frame (`filled: (-0.0, 30.0, 1408.0, 851.0)` vs. `ax visibleFrame: (0.0, 30.0, 1408.0, 851.0)` — task-8-report.md, Check 1). That proves the fill *mechanism* is correct; it does not prove a real click reaches it, since `ClickInterceptor` (Task 9) has never been driven by an actual mouse click. "Stays in the current Space" and "menu bar/Dock still visible" were never measured by any task. |
+| 2 | Click green again | Returns to the previous size and position | **PASS — real click, owner-verified 2026-08-16** | Owner confirmed a second click restores the window. Together with row 1 this closes the fill/restore toggle, the feature's central promise, under real clicks. Supporting mechanism evidence, Task 8: driven directly, the restore matched `before` exactly or within ~1pt on every edge across several runs (task-8-report.md, Checks 1–2 and the round-1 fix's re-verification). The click path is untested. |
 | 3 | Fill, drag the window somewhere else, click green | Fills fresh rather than snapping back to the old frame | PASS — automated, not click-driven | Task 8, "Check 3 — moved-window case": within one `WindowFiller`/`FrameStore` instance, the window was moved via `osascript` between an internal fill call and an internal restore call on a live Finder window. Output: `before: (420.0, 160.0, 700.0, 550.0)`, `filled: (0.0, 30.0, 1408.0, 851.0)`, `restored: (0.0, 30.0, 1408.0, 851.0)` — it filled fresh again rather than snapping back to `before`, proving `FrameStore.restorable`'s mismatch detection genuinely drops a stale record. Reconfirmed under a real pumped run loop with a temporary, uncommitted harness reproduced in full in the same report. This establishes the underlying mechanism; it was never triggered by an actual fill→drag→click sequence. |
-| 4 | `Option`+click green | Enters native fullscreen on a new Space | | Pending — needs a human click. `Sources/MacMaxTests/ClickPolicyTests.swift` ("Option+click toggles fullscreen") unit-tests only that `ClickPolicy.action` *decides* on `.toggleFullScreen` when the Option flag is held — pure logic, no Accessibility involved. No task ever exercised `WindowFiller.toggleFullScreen`'s actual `AX.setFullScreen`/`AX.press` call, or observed a real Space transition. |
+| 4 | `Option`+click green | Enters native fullscreen on a new Space | **PASS — real click, owner-verified 2026-08-16** | Owner confirmed `Option`+click enters native fullscreen, exercising `WindowFiller.toggleFullScreen`'s live `AX.setFullScreen` call for the first time. Note the owner reported entering fullscreen; leaving it again is row 5 and is still unrun. Supporting logic evidence: `Sources/MacMaxTests/ClickPolicyTests.swift` ("Option+click toggles fullscreen") unit-tests only that `ClickPolicy.action` *decides* on `.toggleFullScreen` when the Option flag is held — pure logic, no Accessibility involved. No task ever exercised `WindowFiller.toggleFullScreen`'s actual `AX.setFullScreen`/`AX.press` call, or observed a real Space transition. |
 | 5 | `Option`+click green again while fullscreen | Leaves fullscreen | | Pending — needs a human click. Same gap as row 4: nothing in any report exercises `toggleFullScreen` live, in either direction. |
 | 6 | Click green while fullscreen | Leaves fullscreen (the click passes through) | | Pending — needs a human click. No automated evidence at all. Worth flagging plainly: `ClickPolicy.action` does not special-case an already-fullscreen window — a plain click on a green button subrole always maps to `.fillOrRestore`. Whether this row's expected passthrough happens depends on `GreenButtonHitTest` failing to find a hittable green button while the window is in native fullscreen (a different Space), which no task has characterized. This is not asserted to be a defect — it is genuinely unverified, and the mechanism that would make the expected result happen is not obvious from reading the code alone. |
 | 7 | `Command`+click green | macOS's default behaviour, unchanged | | Pending — needs a human click. `ClickPolicyTests.swift` ("Command+click passes through") confirms the decision logic in isolation (`.maskCommand` held → `.passThrough`), which is the entirety of what Mac Max's own code does for this case — once `.passThrough` is chosen, `ClickInterceptor` forwards the event untouched and macOS handles the rest itself. Higher confidence than most pending rows below, since there is little left for Mac Max to get wrong, but never observed via an actual Command-click through the event tap. |
@@ -53,8 +76,16 @@ worked through it.
 
 ## Summary
 
+- **Confirmed by real clicks (owner, 2026-08-16):** rows 1, 2, 4 — 3 of 21.
 - **Automated (evidence gathered, not click-driven):** rows 3, 8, 12, 21 — 4 of 21.
-- **Pending — needs a human click:** rows 1, 2, 4, 5, 6, 7, 9, 10, 11, 13, 14, 15, 16, 17, 18, 19, 20 — 17 of 21.
+- **Pending — needs a human click:** rows 5, 6, 7, 9, 10, 11, 13, 14, 15, 16, 17, 18, 19, 20 — 14 of 21.
+
+The three confirmed rows are the ones the feature is actually for. The highest-value
+remaining rows are 6 (green while already fullscreen — reworked in the final fix wave
+and never exercised), 13–14 (other apps, particularly one where
+`make probe ARGS="find <name>"` reports NOT FOUND, which is the direct-resize
+fallback), and a row not in this table at all: a plain click on a **background,
+non-key** window, which exercises an `AX.isEnabled` guard added in the final pass.
 
 Anything that fails when the owner runs the pending rows becomes a fix; re-run the
 affected row (and any row whose evidence the fix could have changed) after fixing, and

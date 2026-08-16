@@ -85,6 +85,17 @@ make reset-permission
 This runs `tccutil reset Accessibility com.nielsvaes.MacMax`. It only touches Mac
 Max's own TCC entry; nothing else on the machine is affected.
 
+**Toggling the switch off and on again does not fix this**, which is what makes the
+symptom confusing. macOS pins an ad-hoc grant to the exact binary hash, so once that
+pin is invalidated — by a rebuild, or by `make install` replacing a bundle that
+already had an entry — the row keeps showing as enabled while no longer applying to
+the app that is actually running. Launching it re-prompts, because the system genuinely
+considers it untrusted. Reset the entry (or select it in the Accessibility list and
+remove it with **−**), then grant it again.
+
+This is worth doing once and never again: with the `Mac Max Dev` identity above, the
+grant is pinned to the certificate instead of to a binary hash, and survives rebuilds.
+
 ## Enabling/disabling and Launch at Login
 
 The **Enabled** checkbox in the menu bar toggles interception on and off instantly,
